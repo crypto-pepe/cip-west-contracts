@@ -1,1 +1,1 @@
-# cip-we-contracts
+# West contracts
