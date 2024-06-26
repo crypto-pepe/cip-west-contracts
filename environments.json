@@ -41,5 +41,32 @@
     },
     "migrationContractAddress": "cEBusPQ2xMedWtTrMDk7b54oC8JHpBnaykSHefFfV3p",
     "multisigContractAddress": "FHCjKGCdzBNYHgJBwsmfB2oJHuCN7PVj9MtoT4rA4bjo"
+  },
+  "mainnet": {
+    "leasingNode": {
+      "infraFee": 2500,
+      "maxInfraFee": 10000
+    },
+    "assets": [],
+    "accounts": ["neo", "morpheus", "trinity", "max"],
+    "amountPerAccount": 100000000000,
+    "contracts": ["waves_caller", "executor", "multisig", "technical"],
+    "amountPerContract": 10000000000,
+    "nonceOffset": 1,
+    "network": {
+      "name": "mainnet",
+      "nodeAPI": "https://voting-node-0.we.vote",
+      "nodeTimeout": 60000,
+      "chainID": 86,
+      "apiKey": "xlV5gKnlYMju6VorWbeQyYzP",
+      "transferFee": 1000000,
+      "invokeFee": 10000000,
+      "additionalFee": 400000,
+      "issueFee": 100000000,
+      "setWasmScriptFee": 100000000,
+      "setScriptFee": 1400000
+    },
+    "migrationContractAddress": "",
+    "multisigContractAddress": ""
   }
 }

@@ -41,7 +41,7 @@ export default async function (
       throw 'todo'; // TODO: set
       break;
     case 'testnet':
-      signerPublicKey = await getPublicKeyFromPrivateKey(deployerPrivateKey); // TODO: fixme
+      signerPublicKey = '2ApYaGtQXJKkd1s31CjP1uSLjUF9m2fDQ4b41AvVubsb';
       break;
   }
 

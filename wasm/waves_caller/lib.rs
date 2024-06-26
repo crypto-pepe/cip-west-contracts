@@ -5,6 +5,7 @@ use we_cdk::*;
 
 const SEP: String = "__";
 const FUNC_SEP: String = "####";
+const KEY_INIT: String = "INIT";
 const KEY_THIS: String = "THIS";
 const KEY_MULTISIG: String = "MULTISIG";
 const KEY_STATUS: String = "STATUS";
@@ -25,12 +26,39 @@ fn validate_contract(contract: &[u8]) -> bool {
     contract.len() == 32
 }
 
+#[no_mangle]
+#[inline(always)]
+fn verify_multisig_confirmation() -> i32 {
+    unsafe {
+        let tx_id = to_base58_string!(tx!(tx_id));
+        let this = get_storage!(string::KEY_THIS);
+        let multisig = get_storage!(string::KEY_MULTISIG);
+
+        let status_key = join!(string::KEY_STATUS, SEP, this, SEP, tx_id);
+        require!(
+            contains_key!(base58!(multisig) => status_key)
+                && get_storage!(boolean::base58!(multisig) => status_key),
+            "verify_multisig_confirmation: revert"
+        );
+    }
+
+    0
+}
+
 #[action]
 fn _constructor(multisig: String, pauser: String, call_chain_id: Integer) {
-    require!(validate_contract(base58!(multisig)));
-    require!(validate_address(base58!(pauser)));
-    require!(call_chain_id > 0);
+    require!(!contains_key!(KEY_INIT), "_constructor: already inited");
+    require!(
+        validate_contract(base58!(multisig)),
+        "_constructor: inv multisig"
+    );
+    require!(
+        validate_address(base58!(pauser)),
+        "_constructor: inv pauser"
+    );
+    require!(call_chain_id > 0, "_constructor: inv call_chain_id");
 
+    set_storage!(boolean::KEY_INIT => true);
     set_storage!(string::KEY_THIS => to_base58_string!(tx!(tx_id)));
     set_storage!(string::KEY_MULTISIG => multisig);
     set_storage!(boolean::KEY_PAUSED => false);
@@ -48,16 +76,22 @@ fn call(
     function_args: String,
 ) {
     let caller: String = to_base58_string!(caller!());
-    require!(caller.len() > 0);
+    require!(caller.len() > 0, "call: caller is not contract");
 
     let allowance_key = join!(string::KEY_ALLOWANCE, SEP, caller);
-    require!(contains_key!(allowance_key) && get_storage!(boolean::allowance_key));
+    require!(
+        contains_key!(allowance_key) && get_storage!(boolean::allowance_key),
+        "call: not allowed"
+    );
 
-    require!(!get_storage!(boolean::KEY_PAUSED));
-    require!(execution_chain_id > 0);
-    require!(!execution_contract.is_empty());
-    require!(!function_name.is_empty());
-    require!(!function_args.is_empty());
+    require!(!get_storage!(boolean::KEY_PAUSED), "call: paused");
+    require!(execution_chain_id > 0, "call: inv execution_chain_id");
+    require!(
+        !execution_contract.is_empty(),
+        "call: inv execution_contract"
+    );
+    require!(!function_name.is_empty(), "call: inv function_name");
+    require!(!function_args.is_empty(), "call: inv function_args");
 
     let nonce: Integer = get_storage!(integer::KEY_NONCE);
     let event_size: Integer = get_storage!(integer::KEY_EVENT_SIZE);
@@ -91,34 +125,24 @@ fn call(
 
 #[action]
 fn allow(caller: String) {
-    let this = get_storage!(string::KEY_THIS);
-    let multisig = get_storage!(string::KEY_MULTISIG);
-    let tx_id = to_base58_string!(tx!(tx_id));
+    let exitcode = verify_multisig_confirmation();
+    if exitcode != 0 {
+        return exitcode;
+    }
 
-    let status_key = join!(string::KEY_STATUS, SEP, this, SEP, tx_id);
-    require!(
-        contains_key!(base58!(multisig) => status_key)
-            && get_storage!(boolean::base58!(multisig) => status_key)
-    );
-
-    require!(validate_contract(base58!(caller)));
+    require!(validate_contract(base58!(caller)), "allow: inv caller");
 
     set_storage!(boolean::join!(string::KEY_ALLOWANCE, SEP, caller) => true);
 }
 
 #[action]
 fn disallow(caller: String) {
-    let this = get_storage!(string::KEY_THIS);
-    let multisig = get_storage!(string::KEY_MULTISIG);
-    let tx_id = to_base58_string!(tx!(tx_id));
+    let exitcode = verify_multisig_confirmation();
+    if exitcode != 0 {
+        return exitcode;
+    }
 
-    let status_key = join!(string::KEY_STATUS, SEP, this, SEP, tx_id);
-    require!(
-        contains_key!(base58!(multisig) => status_key)
-            && get_storage!(boolean::base58!(multisig) => status_key)
-    );
-
-    require!(validate_contract(base58!(caller)));
+    require!(validate_contract(base58!(caller)), "disallow: inv caller");
 
     set_storage!(boolean::join!(string::KEY_ALLOWANCE, SEP, caller) => false);
 }
@@ -127,8 +151,11 @@ fn disallow(caller: String) {
 fn pause() {
     let sender: String = to_base58_string!(tx!(sender));
 
-    require!(equals!(string::sender, get_storage!(string::KEY_PAUSER)));
-    require!(!get_storage!(boolean::KEY_PAUSED));
+    require!(
+        equals!(string::sender, get_storage!(string::KEY_PAUSER)),
+        "pause: not pauser"
+    );
+    require!(!get_storage!(boolean::KEY_PAUSED), "pause: paused");
 
     set_storage!(boolean::KEY_PAUSED => true);
 }
@@ -137,42 +164,41 @@ fn pause() {
 fn unpause() {
     let sender: String = to_base58_string!(tx!(sender));
 
-    require!(equals!(string::sender, get_storage!(string::KEY_PAUSER)));
-    require!(get_storage!(boolean::KEY_PAUSED));
+    require!(
+        equals!(string::sender, get_storage!(string::KEY_PAUSER)),
+        "unpause: not pauser"
+    );
+    require!(get_storage!(boolean::KEY_PAUSED), "unpause: not paused");
 
     set_storage!(boolean::KEY_PAUSED => false);
 }
 
 #[action]
 fn update_pauser(new_pauser: String) {
-    let tx_id = to_base58_string!(tx!(tx_id));
-    let this = get_storage!(string::KEY_THIS);
-    let multisig = get_storage!(string::KEY_MULTISIG);
+    let exitcode = verify_multisig_confirmation();
+    if exitcode != 0 {
+        return exitcode;
+    }
 
-    let status_key = join!(string::KEY_STATUS, SEP, this, SEP, tx_id);
     require!(
-        contains_key!(base58!(multisig) => status_key)
-            && get_storage!(boolean::base58!(multisig) => status_key)
+        validate_address(base58!(new_pauser)),
+        "update_pauser: inv pauser"
     );
-
-    require!(validate_address(base58!(new_pauser)));
 
     set_storage!(string::KEY_PAUSER => new_pauser);
 }
 
 #[action]
 fn update_multisig(new_multisig: String) {
-    let tx_id = to_base58_string!(tx!(tx_id));
-    let this = get_storage!(string::KEY_THIS);
-    let multisig = get_storage!(string::KEY_MULTISIG);
+    let exitcode = verify_multisig_confirmation();
+    if exitcode != 0 {
+        return exitcode;
+    }
 
-    let status_key = join!(string::KEY_STATUS, SEP, this, SEP, tx_id);
     require!(
-        contains_key!(base58!(multisig) => status_key)
-            && get_storage!(boolean::base58!(multisig) => status_key)
+        validate_contract(base58!(new_multisig)),
+        "update_multisig: inv new_multisig"
     );
-
-    require!(validate_contract(base58!(new_multisig)));
 
     set_storage!(string::KEY_MULTISIG => new_multisig);
 }

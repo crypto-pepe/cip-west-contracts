@@ -8,6 +8,7 @@ use we_cdk::{
 
 const SEP: String = "__";
 const FUNC_SEP: String = "####";
+const KEY_INIT: String = "INIT";
 const KEY_THIS: String = "THIS";
 const KEY_MULTISIG: String = "MULTISIG";
 const KEY_STATUS: String = "STATUS";
@@ -30,13 +31,43 @@ fn validate_contract(contract: &[u8]) -> bool {
     contract.len() == 32
 }
 
+#[no_mangle]
+#[inline(always)]
+fn verify_multisig_confirmation() -> i32 {
+    unsafe {
+        let tx_id = to_base58_string!(tx!(tx_id));
+        let this = get_storage!(string::KEY_THIS);
+        let multisig = get_storage!(string::KEY_MULTISIG);
+
+        let status_key = join!(string::KEY_STATUS, SEP, this, SEP, tx_id);
+        require!(
+            contains_key!(base58!(multisig) => status_key)
+                && get_storage!(boolean::base58!(multisig) => status_key),
+            "verify_multisig_confirmation: revert"
+        );
+    }
+
+    0
+}
+
 #[action]
 fn _constructor(multisig: String, pauser: String, chain_id: Integer, signer_public_key: String) {
-    require!(validate_contract(base58!(multisig)));
-    require!(validate_address(base58!(pauser)));
-    require!(chain_id > 0);
-    require!(base58!(signer_public_key).len() == PUBLIC_KEY_LENGTH);
+    require!(!contains_key!(KEY_INIT), "_constructor: already inited");
+    require!(
+        validate_contract(base58!(multisig)),
+        "_constructor: inv multisig"
+    );
+    require!(
+        validate_address(base58!(pauser)),
+        "_constructor: inv pauser"
+    );
+    require!(chain_id > 0, "_constructor: inv chain_id");
+    require!(
+        base58!(signer_public_key).len() == PUBLIC_KEY_LENGTH,
+        "_constructor: inv signer_public_key"
+    );
 
+    set_storage!(boolean::KEY_INIT => true);
     set_storage!(string::KEY_THIS => to_base58_string!(tx!(tx_id)));
     set_storage!(string::KEY_MULTISIG => multisig);
     set_storage!(boolean::KEY_PAUSED => false);
@@ -59,9 +90,15 @@ fn execute(
     let contract_address_bytes = base58!(contract);
     let tx_hash_bytes = base58!(tx_hash);
 
-    require!(!get_storage!(boolean::KEY_PAUSED));
-    require!(validate_contract(contract_address_bytes));
-    require!(execution_chain_id == get_storage!(integer::KEY_CHAIN_ID));
+    require!(!get_storage!(boolean::KEY_PAUSED), "execute: paused");
+    require!(
+        validate_contract(contract_address_bytes),
+        "execute: inv contract"
+    );
+    require!(
+        execution_chain_id == get_storage!(integer::KEY_CHAIN_ID),
+        "execute: inv execution_chain_id"
+    );
 
     // Serialize func args
     let mut function_args_mut = function_args.as_bytes();
@@ -106,16 +143,22 @@ fn execute(
         function_args_bytes
     );
 
-    let data_hash = fast_hash!(data_bytes);
+    let data_hash = keccak256!(data_bytes);
     let data_hash_str = to_base58_string!(data_hash);
     let public_key = base58!(get_storage!(string::KEY_SIGNER_PUBLIC_KEY));
     let signature_bytes = base58!(signature);
 
-    require!(signature_bytes.len() == SIGNATURE_LENGTH);
-    require!(sig_verify!(data_hash, signature_bytes, public_key));
+    require!(
+        signature_bytes.len() == SIGNATURE_LENGTH,
+        "execute: inv signature len"
+    );
+    require!(
+        sig_verify!(data_hash, signature_bytes, public_key),
+        "execute: inv signature"
+    );
 
     let data_hash_key = join!(string::KEY_DATA_HASH, SEP, data_hash_str);
-    require!(!contains_key!(data_hash_key));
+    require!(!contains_key!(data_hash_key), "execute: duplicate data");
 
     call_contract(
         contract_address_bytes.as_ptr(),
@@ -129,38 +172,40 @@ fn execute(
 
 #[action]
 fn update_signer(new_signer_public_key: String, old_signature: String, new_signature: String) {
-    let tx_id = to_base58_string!(tx!(tx_id));
-    let this = get_storage!(string::KEY_THIS);
-    let multisig = get_storage!(string::KEY_MULTISIG);
-
-    let status_key = join!(string::KEY_STATUS, SEP, this, SEP, tx_id);
-    require!(
-        contains_key!(base58!(multisig) => status_key)
-            && get_storage!(boolean::base58!(multisig) => status_key)
-    );
+    let exitcode = verify_multisig_confirmation();
+    if exitcode != 0 {
+        return exitcode;
+    }
 
     let old_signer_public_key_bytes = base58!(get_storage!(string::KEY_SIGNER_PUBLIC_KEY));
     let new_signer_public_key_bytes = base58!(new_signer_public_key);
-    require!(new_signer_public_key_bytes.len() == PUBLIC_KEY_LENGTH);
+    require!(
+        new_signer_public_key_bytes.len() == PUBLIC_KEY_LENGTH,
+        "update_signer: inv new_signer_public_key"
+    );
 
     let old_signature_bytes = base58!(old_signature);
     let new_signature_bytes = base58!(new_signature);
-    require!(old_signature_bytes.len() == SIGNATURE_LENGTH);
-    require!(new_signature_bytes.len() == SIGNATURE_LENGTH);
+    require!(
+        old_signature_bytes.len() == SIGNATURE_LENGTH,
+        "update_signer: inv old_signature len"
+    );
+    require!(
+        new_signature_bytes.len() == SIGNATURE_LENGTH,
+        "update_signer: inv new_signature len"
+    );
 
     let old_data = join!(binary::"<<<PUBLIC--KEY--MIGRATION--ALLOWED>>>".as_bytes(), old_signer_public_key_bytes, new_signer_public_key_bytes);
     let new_data = join!(binary::"<<<PUBLIC--KEY--MIGRATION--CONFIRMED>>>".as_bytes(), old_signer_public_key_bytes, new_signer_public_key_bytes);
 
-    require!(sig_verify!(
-        old_data,
-        old_signature_bytes,
-        old_signer_public_key_bytes
-    ));
-    require!(sig_verify!(
-        new_data,
-        new_signature_bytes,
-        new_signer_public_key_bytes
-    ));
+    require!(
+        sig_verify!(old_data, old_signature_bytes, old_signer_public_key_bytes),
+        "update_signer: inv old_signature"
+    );
+    require!(
+        sig_verify!(new_data, new_signature_bytes, new_signer_public_key_bytes),
+        "update_signer: inv new_signature"
+    );
 
     set_storage!(string::KEY_SIGNER_PUBLIC_KEY => new_signer_public_key);
 }
@@ -169,8 +214,11 @@ fn update_signer(new_signer_public_key: String, old_signature: String, new_signa
 fn pause() {
     let sender: String = to_base58_string!(tx!(sender));
 
-    require!(equals!(string::sender, get_storage!(string::KEY_PAUSER)));
-    require!(!get_storage!(boolean::KEY_PAUSED));
+    require!(
+        equals!(string::sender, get_storage!(string::KEY_PAUSER)),
+        "pause: not pauser"
+    );
+    require!(!get_storage!(boolean::KEY_PAUSED), "pause: paused");
 
     set_storage!(boolean::KEY_PAUSED => true);
 }
@@ -179,42 +227,41 @@ fn pause() {
 fn unpause() {
     let sender: String = to_base58_string!(tx!(sender));
 
-    require!(equals!(string::sender, get_storage!(string::KEY_PAUSER)));
-    require!(get_storage!(boolean::KEY_PAUSED));
+    require!(
+        equals!(string::sender, get_storage!(string::KEY_PAUSER)),
+        "unpause: not pauser"
+    );
+    require!(get_storage!(boolean::KEY_PAUSED), "unpause: not paused");
 
     set_storage!(boolean::KEY_PAUSED => false);
 }
 
 #[action]
 fn update_pauser(new_pauser: String) {
-    let tx_id = to_base58_string!(tx!(tx_id));
-    let this = get_storage!(string::KEY_THIS);
-    let multisig = get_storage!(string::KEY_MULTISIG);
+    let exitcode = verify_multisig_confirmation();
+    if exitcode != 0 {
+        return exitcode;
+    }
 
-    let status_key = join!(string::KEY_STATUS, SEP, this, SEP, tx_id);
     require!(
-        contains_key!(base58!(multisig) => status_key)
-            && get_storage!(boolean::base58!(multisig) => status_key)
+        validate_address(base58!(new_pauser)),
+        "update_pauser: inv pauser"
     );
-
-    require!(validate_address(base58!(new_pauser)));
 
     set_storage!(string::KEY_PAUSER => new_pauser);
 }
 
 #[action]
 fn update_multisig(new_multisig: String) {
-    let tx_id = to_base58_string!(tx!(tx_id));
-    let this = get_storage!(string::KEY_THIS);
-    let multisig = get_storage!(string::KEY_MULTISIG);
+    let exitcode = verify_multisig_confirmation();
+    if exitcode != 0 {
+        return exitcode;
+    }
 
-    let status_key = join!(string::KEY_STATUS, SEP, this, SEP, tx_id);
     require!(
-        contains_key!(base58!(multisig) => status_key)
-            && get_storage!(boolean::base58!(multisig) => status_key)
+        validate_contract(base58!(new_multisig)),
+        "update_multisig: inv new_multisig"
     );
-
-    require!(validate_contract(base58!(new_multisig)));
 
     set_storage!(string::KEY_MULTISIG => new_multisig);
 }

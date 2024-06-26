@@ -14,8 +14,8 @@ import { NetworkConfig } from './network';
   console.log('Plug-in your ledger device and enter to WAVES application\n');
 
   let networkName: string = '';
-  let dappToConfirm: string = '';
-  let txToConfirm: string = '';
+  let recipient: string = '';
+  let amount: number = 0;
 
   await inquirer
     .prompt([
@@ -28,21 +28,21 @@ import { NetworkConfig } from './network';
       },
       {
         type: 'string',
-        name: 'dapp',
-        message: 'Enter dapp to confirm tx in',
+        name: 'recipient',
+        message: 'Enter recipient',
         waitUserInput: true,
       },
       {
-        type: 'string',
-        name: 'tx',
-        message: 'Enter tx to confirm',
+        type: 'number',
+        name: 'amount',
+        message: 'Enter amount',
         waitUserInput: true,
       },
     ])
     .then((answers) => {
       networkName = answers.network;
-      dappToConfirm = answers.dapp;
-      txToConfirm = answers.tx;
+      recipient = answers.recipient;
+      amount = answers.amount;
     })
     .catch((e) => {
       throw JSON.stringify(e);
@@ -149,17 +149,12 @@ import { NetworkConfig } from './network';
     transport: TransportNodeHid,
   });
 
-  const tx = TRANSACTIONS.CallContract.V7({
-    contractId: multisigContractAddress,
-    contractVersion: 1,
-    contractEngine: 'wasm',
-    callFunc: 'confirm_transaction',
-    params: [
-      { type: 'string', key: 'dapp', value: dappToConfirm },
-      { type: 'string', key: 'tx_id', value: txToConfirm },
-    ],
-    payments: [],
-    fee: network.invokeFee,
+  const tx = TRANSACTIONS.Transfer.V3({
+    recipient: recipient,
+    amount: amount,
+    assetId: undefined,
+    attachment: '',
+    fee: 10000000,
     feeAssetId: undefined,
     senderPublicKey: user.publicKey,
   });
@@ -179,7 +174,7 @@ import { NetworkConfig } from './network';
   signedTx.proofs.add(signature);
   console.log(txId);
 
-  const broadcastedTx = await broadcastTx(signedTx, network, true).catch(
+  const broadcastedTx = await broadcastTx(signedTx, network, false).catch(
     (e) => {
       console.log(e);
       throw e;
