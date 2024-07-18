@@ -27,7 +27,7 @@ export default async function (
       break;
     case 'testnet':
       callChainId = 10006;
-      multisigContractAddress = 'FHCjKGCdzBNYHgJBwsmfB2oJHuCN7PVj9MtoT4rA4bjo';
+      multisigContractAddress = 'DMpJKoFXYBmPBS9Z8UMtrcUawzquWzMEse9jzTNGEm7m';
       break;
   }
 

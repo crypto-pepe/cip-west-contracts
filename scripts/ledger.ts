@@ -70,6 +70,8 @@ import { NetworkConfig } from './network';
   const network: NetworkConfig = getEnvironmentByName(networkName).network;
   const multisigContractAddress =
     getEnvironmentByName(networkName).multisigContractAddress;
+  const multisigContractVersion =
+    getEnvironmentByName(networkName).multisigContractVersion;
 
   let userId = -1;
   let userIdConfirmed = false;
@@ -151,7 +153,7 @@ import { NetworkConfig } from './network';
 
   const tx = TRANSACTIONS.CallContract.V7({
     contractId: multisigContractAddress,
-    contractVersion: 1,
+    contractVersion: multisigContractVersion,
     contractEngine: 'wasm',
     callFunc: 'confirm_transaction',
     params: [

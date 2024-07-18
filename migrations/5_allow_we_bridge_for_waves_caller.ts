@@ -27,9 +27,9 @@ export default async function (
       break;
     case 'testnet':
       wavesCallerContractAddress =
-        'S5pgcet8rVx4DuubdQcwBhmzDSLLmpSWEGqF7gWd9Pt';
+        '59aJQqPYsH5nkVnXrqR7DhHDV91kmVhdvQXofQn72wmX';
       tokenWavesAdapterContractAddress =
-        'HSNBZeJ858vG11a7fB1x65Y5ok4cTR6RhJzcpZo7tHTU';
+        'E5wD1qGQzqsTwycz8n7VCYtqBvVFZDAzsZcH9TH68rAS';
       break;
   }
 

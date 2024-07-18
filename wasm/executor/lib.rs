@@ -88,7 +88,6 @@ fn execute(
     signature: String,
 ) {
     let contract_address_bytes = base58!(contract);
-    let tx_hash_bytes = base58!(tx_hash);
 
     require!(!get_storage!(boolean::KEY_PAUSED), "execute: paused");
     require!(
@@ -134,8 +133,8 @@ fn execute(
         binary::to_bytes!(caller_chain_id),
         to_bytes!(execution_chain_id),
         to_bytes!(nonce),
-        to_bytes!(tx_hash_bytes.len() as i64),
-        tx_hash_bytes,
+        to_bytes!(tx_hash.len() as i64),
+        tx_hash,
         contract_address_bytes,
         to_bytes!(function_name.len() as i64),
         function_name.as_bytes(),
@@ -213,6 +212,7 @@ fn update_signer(new_signer_public_key: String, old_signature: String, new_signa
 #[action]
 fn pause() {
     let sender: String = to_base58_string!(tx!(sender));
+    require!(to_base58_string!(caller!()).len() == 0);
 
     require!(
         equals!(string::sender, get_storage!(string::KEY_PAUSER)),
@@ -226,6 +226,7 @@ fn pause() {
 #[action]
 fn unpause() {
     let sender: String = to_base58_string!(tx!(sender));
+    require!(to_base58_string!(caller!()).len() == 0);
 
     require!(
         equals!(string::sender, get_storage!(string::KEY_PAUSER)),

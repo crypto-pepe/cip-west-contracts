@@ -39,8 +39,9 @@
       "setWasmScriptFee": 100000000,
       "setScriptFee": 1400000
     },
-    "migrationContractAddress": "cEBusPQ2xMedWtTrMDk7b54oC8JHpBnaykSHefFfV3p",
-    "multisigContractAddress": "FHCjKGCdzBNYHgJBwsmfB2oJHuCN7PVj9MtoT4rA4bjo"
+    "migrationContractAddress": "HnJesaKW4AUSzjAFVeNrNCFGxtVkaMmHMWQZmxcXzjxz",
+    "multisigContractAddress": "DMpJKoFXYBmPBS9Z8UMtrcUawzquWzMEse9jzTNGEm7m",
+    "multisigContractVersion": 1
   },
   "mainnet": {
     "leasingNode": {
@@ -67,6 +68,7 @@
       "setScriptFee": 1400000
     },
     "migrationContractAddress": "",
-    "multisigContractAddress": ""
+    "multisigContractAddress": "",
+    "multisigContractVersion": 1
   }
 }
